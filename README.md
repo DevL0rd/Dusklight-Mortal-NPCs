@@ -20,7 +20,7 @@ list, right = its settings):
 | --- | --- | --- |
 | Knockback Strength | 18 | How far a defeated NPC is launched backward. |
 | Launch Height | 34 | How high a defeated NPC is launched. |
-| Death Effect | 1 | `0` = explosion poof, `1` = dark vanish. |
+| Death Effect | 0 | `0` = explosion poof (works anywhere); `1` = dark vanish (only shows in Twilight areas). |
 
 ## Building & deploying
 

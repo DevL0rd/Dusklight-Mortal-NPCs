@@ -41,7 +41,10 @@ const DuskSetting kSettings[] = {
         DUSK_SETTING_FLOAT, 18, 0, 60, 2},
     {"launch_up", "Launch Height", "How high a defeated NPC is launched.", DUSK_SETTING_FLOAT, 34, 0,
         80, 2},
-    {"effect", "Death Effect", "0 = explosion poof, 1 = dark vanish.", DUSK_SETTING_INT, 1, 0, 1, 1},
+    {"effect", "Death Effect",
+        "0 = explosion poof (works anywhere); 1 = dark vanish (only shows in "
+        "Twilight areas where that particle bank is loaded).",
+        DUSK_SETTING_INT, 0, 0, 1, 1},
 };
 
 const DuskHost* g_host = nullptr;
