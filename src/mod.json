@@ -1,0 +1,8 @@
+{
+    "id": "killable_npcs",
+    "name": "Killable NPCs",
+    "version": "1.0.0",
+    "author": "DevL0rd",
+    "about": "Lets you defeat any NPC with your sword. Struck NPCs are launched back and vanish with the standard enemy death effect.",
+    "library": "killable_npcs"
+}

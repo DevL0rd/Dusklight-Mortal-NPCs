@@ -1,0 +1,17 @@
+# Build outputs
+*.so
+*.dll
+*.dylib
+*.o
+*.obj
+build/
+staging/
+
+# Per-mod files generated at runtime by the game/host
+config.json
+settings.json
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
