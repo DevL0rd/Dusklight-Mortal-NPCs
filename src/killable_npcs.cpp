@@ -13,6 +13,7 @@
 // and runs the game's own cc_at_check -- with brief i-frames so one swing counts
 // as one hit.
 
+#include <cmath>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -25,6 +26,7 @@
 #include "f_op/f_op_actor_mng.h"
 #include "d/d_cc_uty.h"                 // cc_at_check, dCcU_AtInfo
 #include "d/d_cc_d.h"                   // dCcD_GObjInf (GetAtSe, getHitSeID)
+#include "d/d_com_inf_game.h"           // dComIfGp_getPlayer
 #include "SSystem/SComponent/c_cc_d.h"  // cCcD_Obj, AT_TYPE_*
 #include "SSystem/SComponent/c_cc_s.h"  // cCcS::ChkNoHitAtTg
 
@@ -44,12 +46,17 @@ const DuskSetting kSettings[] = {
     {"npc_hp", "NPC Health", "Health an actor has before dying, in the game's HP units.",
         DUSK_SETTING_INT, 40, 1, 500, 5},
     {"effect", "Death Effect", "0 = explosion poof, 1 = dark vanish.", DUSK_SETTING_INT, 0, 0, 1, 1},
+    {"flee", "Flee When Hit", "Once struck, the actor keeps running away from you.",
+        DUSK_SETTING_BOOL, 1, 0, 1, 1},
+    {"flee_speed", "Flee Speed", "How fast a fleeing actor runs (units/frame).",
+        DUSK_SETTING_FLOAT, 14, 1, 50, 1},
 };
 
 struct ActorState {
     s16 hp = 0;
     int iframes = 0;
     bool inited = false;
+    bool fleeing = false;  // set on first hit -- runs away from then on
 };
 
 std::unordered_map<u32, ActorState> g_actors;             // per-actor HP + i-frames
@@ -59,6 +66,8 @@ std::vector<std::pair<u32, cCcD_Obj*>> g_candidates;      // (actor id, tg colli
 // use by the collision hook, which runs outside that context.
 s16 g_maxHp = 40;
 u8 g_effect = 0;
+bool g_flee = true;
+f32 g_fleeSpeed = 14.0f;
 
 bool is_player_attack(cCcD_Obj* at) {
     fopAc_ac_c* attacker = at->GetAc();
@@ -103,6 +112,24 @@ void play_hit_sound(fopAc_ac_c* actor, cCcD_Obj* at) {
     fopAcM_seStart(actor, dCcD_GObjInf::getHitSeID(gobj->GetAtSe(), 0), 0);
 }
 
+// Steer a fleeing actor directly away from the player, facing the run direction,
+// using the engine's own move integration.
+void drive_flee(fopAc_ac_c* actor, fopAc_ac_c* player) {
+    f32 dx = actor->current.pos.x - player->current.pos.x;
+    f32 dz = actor->current.pos.z - player->current.pos.z;
+    f32 len = std::sqrt(dx * dx + dz * dz);
+    if (len < 1.0f) {
+        dx = 0.0f;  // standing on the player -- pick an arbitrary direction
+        dz = 1.0f;
+        len = 1.0f;
+    }
+    const f32 nx = dx / len;
+    const f32 nz = dz / len;
+    actor->shape_angle.y = static_cast<s16>(std::atan2(nx, nz) * (32768.0f / 3.14159265f));
+    cXyz move(nx * g_fleeSpeed, 0.0f, nz * g_fleeSpeed);
+    fopAcM_posMove(actor, &move);
+}
+
 }  // namespace
 
 extern "C" {
@@ -117,6 +144,8 @@ void mod_init(DuskModAPI* api) {
 void mod_tick(DuskModAPI* api) {
     g_maxHp = static_cast<s16>(api->setting_get("npc_hp"));
     g_effect = static_cast<u8>(api->setting_get("effect"));
+    g_flee = api->setting_get("flee") != 0.0;
+    g_fleeSpeed = static_cast<f32>(api->setting_get("flee_speed"));
 
     for (auto& [id, state] : g_actors) {
         if (state.iframes > 0) {
@@ -162,9 +191,30 @@ void mod_tick(DuskModAPI* api) {
             fopAcM_createDisappear(actor, &actor->current.pos, 10, g_effect, 0xFF);
             fopAcM_delete(actor);
             g_actors.erase(id);
+        } else if (g_flee) {
+            state.fleeing = true;  // struck and survived -- flee from now on
         }
     }
     g_candidates.clear();
+
+    // Keep fleeing actors running away from the player every frame.
+    if (g_flee) {
+        if (fopAc_ac_c* player = dComIfGp_getPlayer(0)) {
+            for (auto it = g_actors.begin(); it != g_actors.end();) {
+                if (!it->second.fleeing) {
+                    ++it;
+                    continue;
+                }
+                fopAc_ac_c* actor = fopAcM_SearchByID(it->first);
+                if (actor == nullptr) {
+                    it = g_actors.erase(it);
+                    continue;
+                }
+                drive_flee(actor, player);
+                ++it;
+            }
+        }
+    }
 }
 
 void mod_cleanup(DuskModAPI* api) {
