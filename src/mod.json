@@ -4,5 +4,7 @@
     "version": "1.0.0",
     "author": "DevL0rd",
     "description": "Lets you defeat almost any actor. Any player attack -- sword, wolf bite, slingshot, arrows, bombs -- deals real damage, with configurable health and the weapon's hit sound, and the target dies like a normal enemy.",
-    "has_code": true
+    "has_code": true,
+    "priority": 0,
+    "dependencies": []
 }
