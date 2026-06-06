@@ -1,79 +1,53 @@
 # Killable NPCs
 
-A native [Dusklight](https://github.com/TwilitRealm/dusklight) mod that lets you
-defeat any NPC with your sword. Struck NPCs are launched back and vanish with the
-standard enemy death effect.
+A [Dusklight](https://github.com/TwilitRealm/dusklight) code mod that lets you
+defeat almost any actor. Any player attack — sword, wolf bite, slingshot, arrows,
+bombs — deals real damage with configurable health and the weapon's own hit
+sound, and the target dies like a normal enemy. Only the player and ordinary
+enemies are excluded (enemies already handle their own damage).
 
-It's a **detour mod**: Dusklight exports its symbols, so this mod hooks game
-functions at runtime (via [funchook](https://github.com/kubo/funchook)) and calls
-game code directly through the game's own headers — no game-side support code.
-Specifically it hooks `daAlink_c::setSwordHitVibration` (detect the sword hitting
-an NPC) and `fapGm_Execute` (drive the knockback each frame).
+## How it works
+
+Most actors carry the game's collision + `health` machinery, but their target
+colliders reject player attacks at the At/Tg type gate and never run a damage
+check. The mod hooks `cCcS::ChkNoHitAtTg` (via the Dusklight hook API) to
+force-allow player attacks against those colliders, then each frame runs the
+game's own `cc_at_check` on the actors that were actually struck — so damage,
+knockback and death are exactly the game's, not a reimplementation. Brief
+i-frames make one swing count as one hit.
 
 ## Settings
 
-The mod declares these in code (`define_settings` at init); the host writes them
-to a generated `settings.json` and shows them in the **Mods** tab (left = mod
-list, right = its settings):
+Declared in code (`define_settings` at init) and shown in the **Mods** tab
+(left = mod list, right = its settings):
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| Knockback Strength | 18 | How far a defeated NPC is launched backward. |
-| Launch Height | 34 | How high a defeated NPC is launched. |
+| NPC Health | 40 | Health an actor has before dying, in the game's HP units. |
 | Death Effect | 0 | `0` = explosion poof (works anywhere); `1` = dark vanish (only shows in Twilight areas). |
 
-## Building & deploying
+## Building
 
-Because a detour mod reaches directly into the game, it builds against the
-Dusklight source tree (headers), a configured Dusklight build dir (generated +
-fetched headers such as Tracy), and funchook. The paths live in this mod's
-[`config.sh`](config.sh) and default to siblings under `~/Github`:
-
-By default the build expects `dusklight` and `funchook` checked out under
-`~/Github` (alongside your `TwilightPrinces/` mods); override the paths in
-`config.sh` if your layout differs.
-
-```
-~/Github/
-    dusklight/              built once, without LTO (e.g. linux-default-relwithdebinfo)
-    funchook/               git clone https://github.com/kubo/funchook
-    TwilightPrinces/        your Dusklight-related repos
-        killable_npcs/      (this mod -- a self-contained repo)
-            config.sh       DUSKLIGHT_DIR / DUSKLIGHT_BUILD_DIR / FUNCHOOK_DIR / DEPLOY_DIR
-            build.sh        build + deploy
-            deploy.sh       install the built mod into DEPLOY_DIR
-            src/            killable_npcs.cpp + mod.json
-            ...
-```
-
-Edit `config.sh` (or export the vars) for your machine, then:
+This is a code mod built with the Dusklight mod SDK. It needs a Dusklight source
+checkout (for the game headers + the `add_dusk_mod()` packaging helper); by
+default it expects `~/Github/dusklight`.
 
 ```sh
 ./build.sh
 ```
 
-That builds the mod and **auto-deploys** it. CMake compiles in `staging/` (its
-scratch tree) and assembles the ready-to-copy folder at `build/killable_npcs/`
-(the library + `mod.json`, laid out exactly as it belongs in `mods/`);
-`build.sh` then calls `./deploy.sh`, which copies that folder into
-`DEPLOY_DIR/killable_npcs/` (the game's `mods/` folder). Both `build/` and
-`staging/` are git-ignored. Restart Dusklight; the mod is enabled by default.
-`config.json` (enabled state + saved settings) and `settings.json` (the declared
-settings) are generated there automatically.
-
-To deploy an already-built mod without rebuilding: `./deploy.sh`.
-
-> Dusklight must be built **without LTO** (the non-`release` presets already are)
-> so the functions this mod hooks remain real, addressable symbols. Rebuild +
-> redeploy whenever Dusklight is rebuilt — stale mod binaries will not load.
+That packages `killable_npcs.dusk` straight into the game's mods folder
+(`~/.local/share/TwilitRealm/Dusklight/mods` by default — override with
+`MODS_DIR`, and the Dusklight path with `DUSK_DIR`). The running game
+**hot-reloads** the mod when the package changes, so you can iterate without
+restarting. The mod is enabled by default; its enabled state and settings are
+saved by the game under `mods/.config/`.
 
 ## Files
 
 | File | Purpose |
 | --- | --- |
-| `src/killable_npcs.cpp` | Mod source (detours + direct game calls). |
-| `src/mod.json` | Metadata (id, name, version, author, library). |
-| `CMakeLists.txt` | CMake build (links funchook, points at the Dusklight tree). |
-| `config.sh` | Paths: Dusklight tree/build dir, funchook, and deploy target. |
-| `build.sh` | Build + deploy (uses `config.sh`, `deploy.sh`). |
-| `deploy.sh` | Copy the built mod into the game's `mods/` folder. |
+| `src/killable_npcs.cpp` | Mod source (`mod_init`/`mod_tick` + the collision hook). |
+| `src/mod.json` | Metadata (id, name, version, author, description, has_code). |
+| `CMakeLists.txt` | Declares the mod via the Dusklight SDK's `add_dusk_mod()`. |
+| `build.sh` | Build + package into the game's mods folder. |
